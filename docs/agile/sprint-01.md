@@ -14,8 +14,12 @@ Establish a professional, installable `linkeval` skeleton whose quality gates an
 
 ## Current state
 
-- Story 1 - In Progress
-- Stories 2-5 - Backlog
+## Current state
+
+- Story 1 - Implementation complete; awaiting PR/CI merge
+- Story 2 - Local quality gates complete; awaiting PR/CI merge
+- Story 3 - In Progress
+- Stories 4-5 - Backlog
 
 ## Review
 
