@@ -1,0 +1,33 @@
+name: Spike
+description: Timeboxed investigation used to reduce technical or statistical uncertainty
+title: "[Spike] "
+labels:
+  - spike
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What uncertainty must this spike resolve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Expected outcome
+      description: State what decision or evidence should exist when the spike ends.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: estimate
+    attributes:
+      label: Estimate
+      options:
+        - "1"
+        - "2"
+        - "3"
+        - "5"
+    validations:
+      required: true
