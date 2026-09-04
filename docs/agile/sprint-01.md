@@ -18,7 +18,7 @@ Establish a professional, installable `linkeval` skeleton whose quality gates an
 - Story 2 - Done
 - Story 3 - Done
 - Story 4 - In Review
-- Story 5 - Backlog
+- Story 5 - In Review
 
 ## Review
 
