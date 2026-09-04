@@ -19,6 +19,7 @@ Establish a professional, installable `linkeval` skeleton whose quality gates an
 - Story 3 - Done
 - Story 4 - In Review
 - Story 5 - In Review
+- Story 5 - In Review - release pipeline merged; 0.0.1 publication pending
 
 ## Review
 
