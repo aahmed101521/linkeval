@@ -2,7 +2,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from linkeval.core import RecordPair, RecordPairSet, RecordUniverse
+from linkeval.core import RecordCluster, RecordPair, RecordPairSet, RecordUniverse
 
 
 def test_record_universe_preserves_input_order() -> None:
@@ -289,3 +289,145 @@ def test_record_pair_set_iteration_uses_second_position_as_tiebreaker() -> None:
         ("A", "B"),
         ("A", "C"),
     ]
+
+
+def test_record_cluster_normalizes_records_by_universe_order() -> None:
+    universe = RecordUniverse(["A", "B", "C", "D"])
+
+    cluster = RecordCluster(universe, ["C", "A", "B"])
+
+    assert cluster.records == ("A", "B", "C")
+
+
+def test_record_cluster_collapses_duplicate_records() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+
+    cluster = RecordCluster(universe, ["C", "A", "A", "B"])
+
+    assert cluster.records == ("A", "B", "C")
+    assert len(cluster) == 3
+
+
+def test_record_cluster_rejects_record_outside_universe() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    with pytest.raises(KeyError):
+        RecordCluster(universe, ["A", "X"])
+
+
+def test_record_cluster_rejects_empty_cluster() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    with pytest.raises(ValueError):
+        RecordCluster(universe, [])
+
+
+def test_singleton_record_cluster_is_valid() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    cluster = RecordCluster(universe, ["A"])
+
+    assert cluster.records == ("A",)
+    assert len(cluster) == 1
+
+
+def test_record_cluster_reports_membership() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+    cluster = RecordCluster(universe, ["A", "C"])
+
+    assert "A" in cluster
+    assert "C" in cluster
+    assert "B" not in cluster
+
+
+def test_record_cluster_iteration_is_deterministic() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+    cluster = RecordCluster(universe, ["C", "A", "B"])
+
+    assert list(cluster) == ["A", "B", "C"]
+
+
+def test_record_cluster_exposes_universe() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    cluster = RecordCluster(universe, ["A"])
+
+    assert cluster.universe is universe
+
+
+def test_record_clusters_ignore_input_order_for_equality() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+
+    first = RecordCluster(universe, ["A", "B", "C"])
+    second = RecordCluster(universe, ["C", "A", "B"])
+
+    assert first == second
+
+
+def test_equal_record_clusters_have_same_hash() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+
+    first = RecordCluster(universe, ["A", "B", "C"])
+    second = RecordCluster(universe, ["C", "A", "B"])
+
+    assert hash(first) == hash(second)
+
+
+def test_record_clusters_from_different_universes_are_not_equal() -> None:
+    first_universe = RecordUniverse(["A", "B"])
+    second_universe = RecordUniverse(["A", "B"])
+
+    first = RecordCluster(first_universe, ["A", "B"])
+    second = RecordCluster(second_universe, ["A", "B"])
+
+    assert first != second
+
+
+def test_record_cluster_is_not_equal_to_unrelated_object() -> None:
+    universe = RecordUniverse(["A", "B"])
+    cluster = RecordCluster(universe, ["A", "B"])
+
+    assert cluster != ("A", "B")
+
+
+@given(
+    first=st.text(min_size=1),
+    second=st.text(min_size=1),
+    third=st.text(min_size=1),
+)
+def test_record_cluster_is_invariant_to_input_order(
+    first: str,
+    second: str,
+    third: str,
+) -> None:
+    unique_records = list(dict.fromkeys([first, second, third]))
+
+    universe = RecordUniverse(unique_records)
+
+    forward = RecordCluster(universe, unique_records)
+    reverse = RecordCluster(universe, list(reversed(unique_records)))
+
+    assert forward == reverse
+    assert forward.records == reverse.records
+    assert hash(forward) == hash(reverse)
+
+
+@given(
+    first=st.text(min_size=1),
+    second=st.text(min_size=1),
+)
+def test_record_cluster_is_invariant_to_duplicate_records(
+    first: str,
+    second: str,
+) -> None:
+    unique_records = list(dict.fromkeys([first, second]))
+
+    universe = RecordUniverse(unique_records)
+
+    cluster = RecordCluster(
+        universe,
+        unique_records + unique_records + unique_records,
+    )
+
+    assert cluster.records == tuple(unique_records)
+    assert len(cluster) == len(unique_records)
