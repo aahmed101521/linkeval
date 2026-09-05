@@ -2,7 +2,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from linkeval.core import RecordPair, RecordUniverse
+from linkeval.core import RecordPair, RecordPairSet, RecordUniverse
 
 
 def test_record_universe_preserves_input_order() -> None:
@@ -147,3 +147,145 @@ def test_record_pairs_from_different_universes_are_not_equal() -> None:
     second = RecordPair(second_universe, "A17", "B92")
 
     assert first != second
+
+
+def test_record_pair_exposes_universe() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    pair = RecordPair(universe, "A", "B")
+
+    assert pair.universe is universe
+
+
+def test_empty_record_pair_set_is_valid() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    pair_set = RecordPairSet(universe, [])
+
+    assert len(pair_set) == 0
+
+
+def test_record_pair_set_reports_length() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+    pair_ab = RecordPair(universe, "A", "B")
+    pair_ac = RecordPair(universe, "A", "C")
+
+    pair_set = RecordPairSet(universe, [pair_ab, pair_ac])
+
+    assert len(pair_set) == 2
+
+
+def test_record_pair_set_reports_membership() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+    pair_ab = RecordPair(universe, "A", "B")
+    pair_ac = RecordPair(universe, "A", "C")
+
+    pair_set = RecordPairSet(universe, [pair_ab])
+
+    assert pair_ab in pair_set
+    assert pair_ac not in pair_set
+
+
+def test_record_pair_set_collapses_duplicate_pairs() -> None:
+    universe = RecordUniverse(["A", "B"])
+    pair = RecordPair(universe, "A", "B")
+
+    pair_set = RecordPairSet(universe, [pair, pair])
+
+    assert len(pair_set) == 1
+
+
+def test_record_pair_set_collapses_reversed_logical_pairs() -> None:
+    universe = RecordUniverse(["A", "B"])
+    forward = RecordPair(universe, "A", "B")
+    reverse = RecordPair(universe, "B", "A")
+
+    pair_set = RecordPairSet(universe, [forward, reverse])
+
+    assert len(pair_set) == 1
+
+
+def test_record_pair_set_rejects_pair_from_different_universe() -> None:
+    first_universe = RecordUniverse(["A", "B"])
+    second_universe = RecordUniverse(["A", "B"])
+    pair = RecordPair(second_universe, "A", "B")
+
+    with pytest.raises(ValueError):
+        RecordPairSet(first_universe, [pair])
+
+
+def test_record_pair_set_iteration_uses_universe_order() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+    pair_bc = RecordPair(universe, "B", "C")
+    pair_ab = RecordPair(universe, "A", "B")
+
+    pair_set = RecordPairSet(universe, [pair_bc, pair_ab])
+
+    assert [pair.records for pair in pair_set] == [
+        ("A", "B"),
+        ("B", "C"),
+    ]
+
+
+def test_record_pair_set_exposes_universe() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    pair_set = RecordPairSet(universe, [])
+
+    assert pair_set.universe is universe
+
+
+@given(
+    first=st.text(min_size=1),
+    second=st.text(min_size=1),
+)
+def test_record_pair_set_is_invariant_to_pair_orientation(
+    first: str,
+    second: str,
+) -> None:
+    if first == second:
+        return
+
+    universe = RecordUniverse([first, second])
+
+    forward = RecordPair(universe, first, second)
+    reverse = RecordPair(universe, second, first)
+
+    pair_set = RecordPairSet(universe, [forward, reverse])
+
+    assert len(pair_set) == 1
+    assert forward in pair_set
+    assert reverse in pair_set
+
+
+@given(
+    first=st.text(min_size=1),
+    second=st.text(min_size=1),
+)
+def test_record_pair_set_is_invariant_to_duplicate_pairs(
+    first: str,
+    second: str,
+) -> None:
+    if first == second:
+        return
+
+    universe = RecordUniverse([first, second])
+    pair = RecordPair(universe, first, second)
+
+    pair_set = RecordPairSet(universe, [pair, pair, pair])
+
+    assert len(pair_set) == 1
+    assert pair in pair_set
+
+
+def test_record_pair_set_iteration_uses_second_position_as_tiebreaker() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+    pair_ac = RecordPair(universe, "A", "C")
+    pair_ab = RecordPair(universe, "A", "B")
+
+    pair_set = RecordPairSet(universe, [pair_ac, pair_ab])
+
+    assert [pair.records for pair in pair_set] == [
+        ("A", "B"),
+        ("A", "C"),
+    ]
