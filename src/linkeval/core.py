@@ -1,6 +1,6 @@
 """Core data structures for linkeval."""
 
-from collections.abc import Hashable, Iterable, Set
+from collections.abc import Hashable, Iterable, Iterator, Set
 
 
 class RecordUniverse:
@@ -62,6 +62,11 @@ class RecordPair:
         """Return the pair in canonical universe order."""
         return self._records
 
+    @property
+    def universe(self) -> RecordUniverse:
+        """Return the universe to which the pair belongs."""
+        return self._universe
+
     def __eq__(self, other: object) -> bool:
         """Return whether two pairs represent the same relationship."""
         if not isinstance(other, RecordPair):
@@ -72,3 +77,52 @@ class RecordPair:
     def __hash__(self) -> int:
         """Return a hash consistent with unordered-pair equality."""
         return hash((self._universe, self._records))
+
+
+class RecordPairSet:
+    """A validated deterministic collection of record pairs."""
+
+    def __init__(
+        self,
+        universe: RecordUniverse,
+        pairs: Iterable[RecordPair],
+    ) -> None:
+        """Create a pair set whose pairs all belong to one universe."""
+        self._universe = universe
+        unique_pairs: set[RecordPair] = set()
+
+        for pair in pairs:
+            if pair.universe is not universe:
+                raise ValueError(
+                    "all record pairs must belong to the pair set universe"
+                )
+
+            unique_pairs.add(pair)
+
+        self._pairs = tuple(
+            sorted(
+                unique_pairs,
+                key=lambda pair: (
+                    universe.position(pair.records[0]),
+                    universe.position(pair.records[1]),
+                ),
+            )
+        )
+        self._pair_lookup = frozenset(self._pairs)
+
+    @property
+    def universe(self) -> RecordUniverse:
+        """Return the record universe associated with this pair set."""
+        return self._universe
+
+    def __len__(self) -> int:
+        """Return the number of unique logical pairs."""
+        return len(self._pairs)
+
+    def __contains__(self, pair: object) -> bool:
+        """Return whether a record pair belongs to the pair set."""
+        return pair in self._pair_lookup
+
+    def __iter__(self) -> Iterator[RecordPair]:
+        """Iterate over pairs in deterministic universe order."""
+        return iter(self._pairs)
