@@ -2,7 +2,13 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from linkeval.core import RecordCluster, RecordPair, RecordPairSet, RecordUniverse
+from linkeval.core import (
+    RecordCluster,
+    RecordPair,
+    RecordPairSet,
+    RecordUniverse,
+    cluster_to_pairs,
+)
 
 
 def test_record_universe_preserves_input_order() -> None:
@@ -431,3 +437,95 @@ def test_record_cluster_is_invariant_to_duplicate_records(
 
     assert cluster.records == tuple(unique_records)
     assert len(cluster) == len(unique_records)
+
+
+def test_singleton_cluster_converts_to_empty_pair_set() -> None:
+    universe = RecordUniverse(["A"])
+    cluster = RecordCluster(universe, ["A"])
+
+    pair_set = cluster_to_pairs(cluster)
+
+    assert pair_set.universe is universe
+    assert len(pair_set) == 0
+
+
+def test_two_record_cluster_converts_to_one_pair() -> None:
+    universe = RecordUniverse(["A", "B"])
+    cluster = RecordCluster(universe, ["A", "B"])
+
+    pair_set = cluster_to_pairs(cluster)
+
+    assert len(pair_set) == 1
+    assert [pair.records for pair in pair_set] == [
+        ("A", "B"),
+    ]
+
+
+def test_three_record_cluster_converts_to_all_unordered_pairs() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+    cluster = RecordCluster(universe, ["C", "A", "B"])
+
+    pair_set = cluster_to_pairs(cluster)
+
+    assert [pair.records for pair in pair_set] == [
+        ("A", "B"),
+        ("A", "C"),
+        ("B", "C"),
+    ]
+
+
+def test_cluster_to_pairs_uses_cluster_universe() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+    cluster = RecordCluster(universe, ["A", "B", "C"])
+
+    pair_set = cluster_to_pairs(cluster)
+
+    assert pair_set.universe is universe
+
+    for pair in pair_set:
+        assert pair.universe is universe
+
+
+def test_cluster_to_pairs_does_not_modify_cluster() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+    cluster = RecordCluster(universe, ["C", "A", "B"])
+    original_records = cluster.records
+
+    cluster_to_pairs(cluster)
+
+    assert cluster.records == original_records
+
+
+def test_cluster_to_pairs_generates_no_self_pairs() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+    cluster = RecordCluster(universe, ["A", "B", "C"])
+
+    pair_set = cluster_to_pairs(cluster)
+
+    for pair in pair_set:
+        first, second = pair.records
+        assert first != second
+
+
+def test_cluster_to_pairs_generates_no_duplicate_pairs() -> None:
+    universe = RecordUniverse(["A", "B", "C", "D"])
+    cluster = RecordCluster(universe, ["A", "B", "C", "D"])
+
+    pair_set = cluster_to_pairs(cluster)
+
+    assert len(pair_set) == len(set(pair_set))
+
+
+@given(st.lists(st.text(min_size=1), min_size=1, max_size=12))
+def test_cluster_to_pairs_obeys_pair_count_invariant(records: list[str]) -> None:
+    unique_records = list(dict.fromkeys(records))
+
+    universe = RecordUniverse(unique_records)
+    cluster = RecordCluster(universe, unique_records)
+
+    pair_set = cluster_to_pairs(cluster)
+
+    n_records = len(unique_records)
+    expected_pairs = n_records * (n_records - 1) // 2
+
+    assert len(pair_set) == expected_pairs

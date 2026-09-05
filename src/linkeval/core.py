@@ -1,6 +1,7 @@
 """Core data structures for linkeval."""
 
 from collections.abc import Hashable, Iterable, Iterator, Set
+from itertools import combinations
 
 
 class RecordUniverse:
@@ -188,3 +189,15 @@ class RecordCluster:
     def __hash__(self) -> int:
         """Return a hash consistent with cluster equality."""
         return hash((self._universe, self._records))
+
+
+def cluster_to_pairs(cluster: RecordCluster) -> RecordPairSet:
+    """Return the unordered record pairs implied by a record cluster."""
+    universe = cluster.universe
+
+    pairs = (
+        RecordPair(universe, first, second)
+        for first, second in combinations(cluster.records, 2)
+    )
+
+    return RecordPairSet(universe, pairs)
