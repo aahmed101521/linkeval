@@ -102,6 +102,7 @@ because the internal positions are 1 and 0.
 This does not require `A17` and `B92` themselves to support ordering.
 
 Duplicate logical pairs will therefore collapse deterministically:
+Pair equality is scoped to the same declared `RecordUniverse` instance. Two pairs constructed from separately created universes are not treated as the same evaluation object merely because those universes contain identical record identifiers. This keeps pair identity tied to the explicit statistical universe in which the relationship was defined.
 
 ```text
 (A17, B92)

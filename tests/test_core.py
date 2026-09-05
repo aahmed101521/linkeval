@@ -137,3 +137,13 @@ def test_record_pair_is_not_equal_to_unrelated_object() -> None:
     pair = RecordPair(universe, "A17", "B92")
 
     assert pair != ("A17", "B92")
+
+
+def test_record_pairs_from_different_universes_are_not_equal() -> None:
+    first_universe = RecordUniverse(["A17", "B92"])
+    second_universe = RecordUniverse(["A17", "B92"])
+
+    first = RecordPair(first_universe, "A17", "B92")
+    second = RecordPair(second_universe, "A17", "B92")
+
+    assert first != second
