@@ -299,3 +299,45 @@ def missing_match_rate(
         return float("nan")
 
     return counts.fn / denominator
+
+
+def pairwise_precision(
+    truth: RecordPairSet,
+    prediction: RecordPairSet,
+) -> float:
+    """Return pairwise precision for truth and prediction."""
+    counts = pairwise_counts(truth, prediction)
+    denominator = counts.tp + counts.fp
+
+    if denominator == 0:
+        return float("nan")
+
+    return counts.tp / denominator
+
+
+def pairwise_recall(
+    truth: RecordPairSet,
+    prediction: RecordPairSet,
+) -> float:
+    """Return pairwise recall for truth and prediction."""
+    counts = pairwise_counts(truth, prediction)
+    denominator = counts.tp + counts.fn
+
+    if denominator == 0:
+        return float("nan")
+
+    return counts.tp / denominator
+
+
+def pairwise_f1(
+    truth: RecordPairSet,
+    prediction: RecordPairSet,
+) -> float:
+    """Return pairwise F1 for truth and prediction."""
+    counts = pairwise_counts(truth, prediction)
+    denominator = 2 * counts.tp + counts.fp + counts.fn
+
+    if denominator == 0:
+        return float("nan")
+
+    return 2 * counts.tp / denominator

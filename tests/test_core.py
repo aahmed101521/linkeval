@@ -15,6 +15,9 @@ from linkeval.core import (
     missing_match_rate,
     pairs_to_clusters,
     pairwise_counts,
+    pairwise_f1,
+    pairwise_precision,
+    pairwise_recall,
 )
 
 
@@ -1213,6 +1216,343 @@ def test_flr_and_mmr_do_not_modify_inputs() -> None:
 
     false_link_rate(truth, prediction)
     missing_match_rate(truth, prediction)
+
+    assert tuple(pair.records for pair in truth) == truth_before
+    assert tuple(pair.records for pair in prediction) == prediction_before
+
+
+def test_pairwise_precision_perfect_prediction() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+
+    assert pairwise_precision(truth, prediction) == 1.0
+
+
+def test_pairwise_recall_perfect_prediction() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+
+    assert pairwise_recall(truth, prediction) == 1.0
+
+
+def test_pairwise_f1_perfect_prediction() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+
+    assert pairwise_f1(truth, prediction) == 1.0
+
+
+def test_pairwise_metrics_partial_prediction() -> None:
+    universe = RecordUniverse(["A", "B", "C", "D", "X"])
+
+    truth = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "C", "D"),
+        ],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "C", "X"),
+        ],
+    )
+
+    assert pairwise_precision(truth, prediction) == 0.5
+    assert pairwise_recall(truth, prediction) == 0.5
+    assert pairwise_f1(truth, prediction) == 0.5
+
+
+def test_pairwise_precision_is_nan_when_no_links_are_predicted() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(universe, [])
+
+    assert math.isnan(pairwise_precision(truth, prediction))
+
+
+def test_pairwise_recall_is_nan_when_truth_has_no_links() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(universe, [])
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+
+    assert math.isnan(pairwise_recall(truth, prediction))
+
+
+def test_pairwise_f1_is_nan_when_truth_and_prediction_are_empty() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(universe, [])
+    prediction = RecordPairSet(universe, [])
+
+    assert math.isnan(pairwise_f1(truth, prediction))
+
+
+def test_pairwise_f1_is_zero_when_all_true_links_are_missed() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(universe, [])
+
+    assert pairwise_f1(truth, prediction) == 0.0
+
+
+def test_pairwise_f1_is_zero_when_all_predicted_links_are_false() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(universe, [])
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+
+    assert pairwise_f1(truth, prediction) == 0.0
+
+
+def test_pairwise_precision_is_one_minus_false_link_rate() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "A", "C"),
+        ],
+    )
+
+    assert pairwise_precision(truth, prediction) == 1.0 - false_link_rate(
+        truth,
+        prediction,
+    )
+
+
+def test_pairwise_recall_is_one_minus_missing_match_rate() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+
+    truth = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "A", "C"),
+        ],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+
+    assert pairwise_recall(truth, prediction) == 1.0 - missing_match_rate(
+        truth,
+        prediction,
+    )
+
+
+@given(
+    st.sets(
+        st.tuples(
+            st.integers(min_value=0, max_value=5),
+            st.integers(min_value=0, max_value=5),
+        )
+    ),
+    st.sets(
+        st.tuples(
+            st.integers(min_value=0, max_value=5),
+            st.integers(min_value=0, max_value=5),
+        )
+    ),
+)
+def test_pairwise_metrics_are_bounded_when_defined(
+    truth_indices: set[tuple[int, int]],
+    prediction_indices: set[tuple[int, int]],
+) -> None:
+    universe = RecordUniverse(list(range(6)))
+
+    truth = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, first, second)
+            for first, second in truth_indices
+            if first != second
+        ],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, first, second)
+            for first, second in prediction_indices
+            if first != second
+        ],
+    )
+
+    values = (
+        pairwise_precision(truth, prediction),
+        pairwise_recall(truth, prediction),
+        pairwise_f1(truth, prediction),
+    )
+
+    for value in values:
+        if not math.isnan(value):
+            assert 0.0 <= value <= 1.0
+
+
+@given(
+    st.sets(
+        st.tuples(
+            st.integers(min_value=0, max_value=5),
+            st.integers(min_value=0, max_value=5),
+        )
+    ),
+    st.sets(
+        st.tuples(
+            st.integers(min_value=0, max_value=5),
+            st.integers(min_value=0, max_value=5),
+        )
+    ),
+)
+def test_pairwise_precision_and_recall_match_linkage_error_complements(
+    truth_indices: set[tuple[int, int]],
+    prediction_indices: set[tuple[int, int]],
+) -> None:
+    universe = RecordUniverse(list(range(6)))
+
+    truth = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, first, second)
+            for first, second in truth_indices
+            if first != second
+        ],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, first, second)
+            for first, second in prediction_indices
+            if first != second
+        ],
+    )
+
+    precision = pairwise_precision(truth, prediction)
+    recall = pairwise_recall(truth, prediction)
+    flr = false_link_rate(truth, prediction)
+    mmr = missing_match_rate(truth, prediction)
+
+    if not math.isnan(precision):
+        assert math.isclose(precision, 1.0 - flr)
+
+    if not math.isnan(recall):
+        assert math.isclose(recall, 1.0 - mmr)
+
+
+def test_pairwise_precision_recall_f1_reject_different_universes() -> None:
+    first_universe = RecordUniverse(["A", "B"])
+    second_universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(
+        first_universe,
+        [RecordPair(first_universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        second_universe,
+        [RecordPair(second_universe, "A", "B")],
+    )
+
+    with pytest.raises(ValueError):
+        pairwise_precision(truth, prediction)
+
+    with pytest.raises(ValueError):
+        pairwise_recall(truth, prediction)
+
+    with pytest.raises(ValueError):
+        pairwise_f1(truth, prediction)
+
+
+def test_pairwise_precision_recall_f1_ignore_orientation_and_duplicates() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+
+    truth = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "B", "A"),
+        ],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "B", "A"),
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "A", "C"),
+            RecordPair(universe, "A", "C"),
+        ],
+    )
+
+    assert pairwise_precision(truth, prediction) == 0.5
+    assert pairwise_recall(truth, prediction) == 1.0
+
+    expected_f1 = 2.0 / 3.0
+    assert math.isclose(pairwise_f1(truth, prediction), expected_f1)
+
+
+def test_pairwise_precision_recall_f1_do_not_modify_inputs() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "C")],
+    )
+
+    truth_before = tuple(pair.records for pair in truth)
+    prediction_before = tuple(pair.records for pair in prediction)
+
+    pairwise_precision(truth, prediction)
+    pairwise_recall(truth, prediction)
+    pairwise_f1(truth, prediction)
 
     assert tuple(pair.records for pair in truth) == truth_before
     assert tuple(pair.records for pair in prediction) == prediction_before
