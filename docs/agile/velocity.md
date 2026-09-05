@@ -4,7 +4,7 @@ Velocity is recorded only for sprints that were actually worked.
 
 | Sprint | Committed points | Delivered points | Notes |
 |---|---:|---:|---|
-| Sprint 01 | 10 | TBD | First sprint; initial estimate intentionally not treated as a hard capacity constraint. |
+| Sprint 01 | 10 | 10 | All five committed stories delivered. `linkeval` 0.0.1 was published to PyPI and independently verified from a clean environment. |
 
 ## Rules
 
