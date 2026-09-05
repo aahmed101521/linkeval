@@ -1,7 +1,17 @@
 """Core data structures for linkeval."""
 
 from collections.abc import Hashable, Iterable, Iterator, Set
+from dataclasses import dataclass
 from itertools import combinations
+
+
+@dataclass(frozen=True)
+class PairwiseCounts:
+    """True-positive, false-positive, and false-negative linkage counts."""
+
+    tp: int
+    fp: int
+    fn: int
 
 
 class RecordUniverse:
@@ -243,3 +253,21 @@ def pairs_to_clusters(pair_set: RecordPairSet) -> tuple[RecordCluster, ...]:
         clusters.append(RecordCluster(universe, component))
 
     return tuple(clusters)
+
+
+def pairwise_counts(
+    truth: RecordPairSet,
+    prediction: RecordPairSet,
+) -> PairwiseCounts:
+    """Return pairwise linkage counts for truth and prediction."""
+    if truth.universe is not prediction.universe:
+        raise ValueError("truth and prediction must belong to the same universe")
+
+    truth_pairs = set(truth)
+    predicted_pairs = set(prediction)
+
+    tp = len(truth_pairs & predicted_pairs)
+    fp = len(predicted_pairs - truth_pairs)
+    fn = len(truth_pairs - predicted_pairs)
+
+    return PairwiseCounts(tp=tp, fp=fp, fn=fn)
