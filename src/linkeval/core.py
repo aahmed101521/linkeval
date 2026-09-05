@@ -126,3 +126,65 @@ class RecordPairSet:
     def __iter__(self) -> Iterator[RecordPair]:
         """Iterate over pairs in deterministic universe order."""
         return iter(self._pairs)
+
+
+class RecordCluster:
+    """A validated deterministic cluster of records."""
+
+    def __init__(
+        self,
+        universe: RecordUniverse,
+        records: Iterable[Hashable],
+    ) -> None:
+        """Create a record cluster within one explicit record universe."""
+        self._universe = universe
+
+        unique_records: set[Hashable] = set()
+
+        for record in records:
+            universe.position(record)
+            unique_records.add(record)
+
+        if not unique_records:
+            raise ValueError("a record cluster must contain at least one record")
+
+        self._records = tuple(
+            sorted(
+                unique_records,
+                key=universe.position,
+            )
+        )
+        self._record_lookup = frozenset(self._records)
+
+    @property
+    def records(self) -> tuple[Hashable, ...]:
+        """Return cluster records in canonical universe order."""
+        return self._records
+
+    @property
+    def universe(self) -> RecordUniverse:
+        """Return the record universe associated with this cluster."""
+        return self._universe
+
+    def __len__(self) -> int:
+        """Return the number of unique records in the cluster."""
+        return len(self._records)
+
+    def __contains__(self, record: object) -> bool:
+        """Return whether a record belongs to the cluster."""
+        return record in self._record_lookup
+
+    def __iter__(self) -> Iterator[Hashable]:
+        """Iterate over records in deterministic universe order."""
+        return iter(self._records)
+
+    def __eq__(self, other: object) -> bool:
+        """Return whether two clusters represent the same logical cluster."""
+        if not isinstance(other, RecordCluster):
+            return NotImplemented
+
+        return self._universe is other._universe and self._records == other._records
+
+    def __hash__(self) -> int:
+        """Return a hash consistent with cluster equality."""
+        return hash((self._universe, self._records))
