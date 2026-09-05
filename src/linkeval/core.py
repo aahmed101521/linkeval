@@ -271,3 +271,31 @@ def pairwise_counts(
     fn = len(truth_pairs - predicted_pairs)
 
     return PairwiseCounts(tp=tp, fp=fp, fn=fn)
+
+
+def false_link_rate(
+    truth: RecordPairSet,
+    prediction: RecordPairSet,
+) -> float:
+    """Return the false link rate for truth and prediction."""
+    counts = pairwise_counts(truth, prediction)
+    denominator = counts.tp + counts.fp
+
+    if denominator == 0:
+        return float("nan")
+
+    return counts.fp / denominator
+
+
+def missing_match_rate(
+    truth: RecordPairSet,
+    prediction: RecordPairSet,
+) -> float:
+    """Return the missing match rate for truth and prediction."""
+    counts = pairwise_counts(truth, prediction)
+    denominator = counts.tp + counts.fn
+
+    if denominator == 0:
+        return float("nan")
+
+    return counts.fn / denominator

@@ -1,3 +1,5 @@
+import math
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -9,6 +11,8 @@ from linkeval.core import (
     RecordPairSet,
     RecordUniverse,
     cluster_to_pairs,
+    false_link_rate,
+    missing_match_rate,
     pairs_to_clusters,
     pairwise_counts,
 )
@@ -911,3 +915,304 @@ def test_pairwise_counts_prediction_partition_invariant(
     counts = pairwise_counts(truth, prediction)
 
     assert counts.tp + counts.fp == len(prediction)
+
+
+def test_false_link_rate_perfect_prediction() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+
+    assert false_link_rate(truth, prediction) == 0.0
+
+
+def test_missing_match_rate_perfect_prediction() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+
+    assert missing_match_rate(truth, prediction) == 0.0
+
+
+def test_false_link_rate_partial_prediction() -> None:
+    universe = RecordUniverse(["A", "B", "C", "D", "X"])
+
+    truth = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "C", "D"),
+        ],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "C", "X"),
+        ],
+    )
+
+    assert false_link_rate(truth, prediction) == 0.5
+
+
+def test_missing_match_rate_partial_prediction() -> None:
+    universe = RecordUniverse(["A", "B", "C", "D", "X"])
+
+    truth = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "C", "D"),
+        ],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "C", "X"),
+        ],
+    )
+
+    assert missing_match_rate(truth, prediction) == 0.5
+
+
+def test_false_link_rate_all_predicted_links_are_false() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "C")],
+    )
+
+    assert false_link_rate(truth, prediction) == 1.0
+
+
+def test_missing_match_rate_all_true_links_are_missed() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(universe, [])
+
+    assert missing_match_rate(truth, prediction) == 1.0
+
+
+def test_false_link_rate_is_nan_when_no_links_are_predicted() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(universe, [])
+
+    assert math.isnan(false_link_rate(truth, prediction))
+
+
+def test_missing_match_rate_is_nan_when_truth_has_no_links() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(universe, [])
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+
+    assert math.isnan(missing_match_rate(truth, prediction))
+
+
+def test_flr_and_mmr_are_nan_when_both_pair_sets_are_empty() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(universe, [])
+    prediction = RecordPairSet(universe, [])
+
+    assert math.isnan(false_link_rate(truth, prediction))
+    assert math.isnan(missing_match_rate(truth, prediction))
+
+
+def test_flr_and_mmr_are_orientation_invariant() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "B", "A")],
+    )
+
+    assert false_link_rate(truth, prediction) == 0.0
+    assert missing_match_rate(truth, prediction) == 0.0
+
+
+@given(
+    st.sets(
+        st.tuples(
+            st.integers(min_value=0, max_value=5),
+            st.integers(min_value=0, max_value=5),
+        )
+    ),
+    st.sets(
+        st.tuples(
+            st.integers(min_value=0, max_value=5),
+            st.integers(min_value=0, max_value=5),
+        )
+    ),
+)
+def test_false_link_rate_is_bounded_when_defined(
+    truth_indices: set[tuple[int, int]],
+    prediction_indices: set[tuple[int, int]],
+) -> None:
+    universe = RecordUniverse(list(range(6)))
+
+    truth = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, first, second)
+            for first, second in truth_indices
+            if first != second
+        ],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, first, second)
+            for first, second in prediction_indices
+            if first != second
+        ],
+    )
+
+    value = false_link_rate(truth, prediction)
+
+    if not math.isnan(value):
+        assert 0.0 <= value <= 1.0
+
+
+@given(
+    st.sets(
+        st.tuples(
+            st.integers(min_value=0, max_value=5),
+            st.integers(min_value=0, max_value=5),
+        )
+    ),
+    st.sets(
+        st.tuples(
+            st.integers(min_value=0, max_value=5),
+            st.integers(min_value=0, max_value=5),
+        )
+    ),
+)
+def test_missing_match_rate_is_bounded_when_defined(
+    truth_indices: set[tuple[int, int]],
+    prediction_indices: set[tuple[int, int]],
+) -> None:
+    universe = RecordUniverse(list(range(6)))
+
+    truth = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, first, second)
+            for first, second in truth_indices
+            if first != second
+        ],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, first, second)
+            for first, second in prediction_indices
+            if first != second
+        ],
+    )
+
+    value = missing_match_rate(truth, prediction)
+
+    if not math.isnan(value):
+        assert 0.0 <= value <= 1.0
+
+
+def test_flr_and_mmr_reject_different_universes() -> None:
+    first_universe = RecordUniverse(["A", "B"])
+    second_universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(
+        first_universe,
+        [RecordPair(first_universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        second_universe,
+        [RecordPair(second_universe, "A", "B")],
+    )
+
+    with pytest.raises(ValueError):
+        false_link_rate(truth, prediction)
+
+    with pytest.raises(ValueError):
+        missing_match_rate(truth, prediction)
+
+
+def test_flr_and_mmr_ignore_duplicate_logical_pairs() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+
+    truth = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "A", "B"),
+        ],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "B", "A"),
+            RecordPair(universe, "A", "C"),
+            RecordPair(universe, "A", "C"),
+        ],
+    )
+
+    assert false_link_rate(truth, prediction) == 0.5
+    assert missing_match_rate(truth, prediction) == 0.0
+
+
+def test_flr_and_mmr_do_not_modify_inputs() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "C")],
+    )
+
+    truth_before = tuple(pair.records for pair in truth)
+    prediction_before = tuple(pair.records for pair in prediction)
+
+    false_link_rate(truth, prediction)
+    missing_match_rate(truth, prediction)
+
+    assert tuple(pair.records for pair in truth) == truth_before
+    assert tuple(pair.records for pair in prediction) == prediction_before
