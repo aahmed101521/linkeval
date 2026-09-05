@@ -3,12 +3,14 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from linkeval.core import (
+    PairwiseCounts,
     RecordCluster,
     RecordPair,
     RecordPairSet,
     RecordUniverse,
     cluster_to_pairs,
     pairs_to_clusters,
+    pairwise_counts,
 )
 
 
@@ -685,3 +687,227 @@ def test_complete_cluster_pair_round_trip_preserves_cluster(
     else:
         assert len(clusters) == 1
         assert clusters[0] == cluster
+
+
+def test_pairwise_counts_perfect_prediction() -> None:
+    universe = RecordUniverse(["A", "B", "C", "D"])
+
+    truth = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "C", "D"),
+        ],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "C", "D"),
+        ],
+    )
+
+    counts = pairwise_counts(truth, prediction)
+
+    assert counts == PairwiseCounts(tp=2, fp=0, fn=0)
+
+
+def test_pairwise_counts_partial_prediction() -> None:
+    universe = RecordUniverse(["A", "B", "C", "D", "X"])
+
+    truth = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "C", "D"),
+        ],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "C", "X"),
+        ],
+    )
+
+    counts = pairwise_counts(truth, prediction)
+
+    assert counts == PairwiseCounts(tp=1, fp=1, fn=1)
+
+
+def test_pairwise_counts_empty_truth_and_prediction() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(universe, [])
+    prediction = RecordPairSet(universe, [])
+
+    counts = pairwise_counts(truth, prediction)
+
+    assert counts == PairwiseCounts(tp=0, fp=0, fn=0)
+
+
+def test_pairwise_counts_empty_prediction() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+
+    truth = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "A", "C"),
+        ],
+    )
+    prediction = RecordPairSet(universe, [])
+
+    counts = pairwise_counts(truth, prediction)
+
+    assert counts == PairwiseCounts(tp=0, fp=0, fn=2)
+
+
+def test_pairwise_counts_empty_truth() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+
+    truth = RecordPairSet(universe, [])
+    prediction = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "A", "C"),
+        ],
+    )
+
+    counts = pairwise_counts(truth, prediction)
+
+    assert counts == PairwiseCounts(tp=0, fp=2, fn=0)
+
+
+def test_pairwise_counts_rejects_different_universes() -> None:
+    first_universe = RecordUniverse(["A", "B"])
+    second_universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(
+        first_universe,
+        [RecordPair(first_universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        second_universe,
+        [RecordPair(second_universe, "A", "B")],
+    )
+
+    with pytest.raises(ValueError):
+        pairwise_counts(truth, prediction)
+
+
+def test_pairwise_counts_is_orientation_invariant() -> None:
+    universe = RecordUniverse(["A", "B"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "B", "A")],
+    )
+
+    counts = pairwise_counts(truth, prediction)
+
+    assert counts == PairwiseCounts(tp=1, fp=0, fn=0)
+
+
+def test_pairwise_counts_does_not_modify_inputs() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+
+    truth = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+    prediction = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "C")],
+    )
+
+    truth_before = tuple(pair.records for pair in truth)
+    prediction_before = tuple(pair.records for pair in prediction)
+
+    pairwise_counts(truth, prediction)
+
+    assert tuple(pair.records for pair in truth) == truth_before
+    assert tuple(pair.records for pair in prediction) == prediction_before
+
+
+@given(
+    st.sets(
+        st.tuples(
+            st.integers(min_value=0, max_value=5),
+            st.integers(min_value=0, max_value=5),
+        )
+    ),
+    st.sets(
+        st.tuples(
+            st.integers(min_value=0, max_value=5),
+            st.integers(min_value=0, max_value=5),
+        )
+    ),
+)
+def test_pairwise_counts_truth_partition_invariant(
+    truth_indices: set[tuple[int, int]],
+    prediction_indices: set[tuple[int, int]],
+) -> None:
+    universe = RecordUniverse(list(range(6)))
+
+    truth_pairs = [
+        RecordPair(universe, first, second)
+        for first, second in truth_indices
+        if first != second
+    ]
+    prediction_pairs = [
+        RecordPair(universe, first, second)
+        for first, second in prediction_indices
+        if first != second
+    ]
+
+    truth = RecordPairSet(universe, truth_pairs)
+    prediction = RecordPairSet(universe, prediction_pairs)
+
+    counts = pairwise_counts(truth, prediction)
+
+    assert counts.tp + counts.fn == len(truth)
+
+
+@given(
+    st.sets(
+        st.tuples(
+            st.integers(min_value=0, max_value=5),
+            st.integers(min_value=0, max_value=5),
+        )
+    ),
+    st.sets(
+        st.tuples(
+            st.integers(min_value=0, max_value=5),
+            st.integers(min_value=0, max_value=5),
+        )
+    ),
+)
+def test_pairwise_counts_prediction_partition_invariant(
+    truth_indices: set[tuple[int, int]],
+    prediction_indices: set[tuple[int, int]],
+) -> None:
+    universe = RecordUniverse(list(range(6)))
+
+    truth_pairs = [
+        RecordPair(universe, first, second)
+        for first, second in truth_indices
+        if first != second
+    ]
+    prediction_pairs = [
+        RecordPair(universe, first, second)
+        for first, second in prediction_indices
+        if first != second
+    ]
+
+    truth = RecordPairSet(universe, truth_pairs)
+    prediction = RecordPairSet(universe, prediction_pairs)
+
+    counts = pairwise_counts(truth, prediction)
+
+    assert counts.tp + counts.fp == len(prediction)
