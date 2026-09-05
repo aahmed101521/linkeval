@@ -201,3 +201,45 @@ def cluster_to_pairs(cluster: RecordCluster) -> RecordPairSet:
     )
 
     return RecordPairSet(universe, pairs)
+
+
+def pairs_to_clusters(pair_set: RecordPairSet) -> tuple[RecordCluster, ...]:
+    """Return connected record clusters implied by a record pair set."""
+    universe = pair_set.universe
+
+    adjacency: dict[Hashable, set[Hashable]] = {}
+
+    for pair in pair_set:
+        first, second = pair.records
+
+        adjacency.setdefault(first, set()).add(second)
+        adjacency.setdefault(second, set()).add(first)
+
+    visited: set[Hashable] = set()
+    clusters: list[RecordCluster] = []
+
+    records = sorted(adjacency, key=universe.position)
+
+    for start in records:
+        if start in visited:
+            continue
+
+        component: set[Hashable] = set()
+        stack = [start]
+
+        while stack:
+            record = stack.pop()
+
+            if record in visited:
+                continue
+
+            visited.add(record)
+            component.add(record)
+
+            for neighbor in adjacency[record]:
+                if neighbor not in visited:
+                    stack.append(neighbor)
+
+        clusters.append(RecordCluster(universe, component))
+
+    return tuple(clusters)

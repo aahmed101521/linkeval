@@ -8,6 +8,7 @@ from linkeval.core import (
     RecordPairSet,
     RecordUniverse,
     cluster_to_pairs,
+    pairs_to_clusters,
 )
 
 
@@ -529,3 +530,158 @@ def test_cluster_to_pairs_obeys_pair_count_invariant(records: list[str]) -> None
     expected_pairs = n_records * (n_records - 1) // 2
 
     assert len(pair_set) == expected_pairs
+
+
+def test_empty_pair_set_converts_to_no_clusters() -> None:
+    universe = RecordUniverse(["A", "B"])
+    pair_set = RecordPairSet(universe, [])
+
+    clusters = pairs_to_clusters(pair_set)
+
+    assert clusters == ()
+
+
+def test_single_edge_converts_to_one_cluster() -> None:
+    universe = RecordUniverse(["A", "B"])
+    pair_set = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+
+    clusters = pairs_to_clusters(pair_set)
+
+    assert len(clusters) == 1
+    assert clusters[0].records == ("A", "B")
+    assert clusters[0].universe is universe
+
+
+def test_transitive_pairs_form_one_cluster() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+    pair_set = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "B", "C"),
+        ],
+    )
+
+    clusters = pairs_to_clusters(pair_set)
+
+    assert len(clusters) == 1
+    assert clusters[0].records == ("A", "B", "C")
+
+
+def test_disconnected_pairs_form_separate_clusters() -> None:
+    universe = RecordUniverse(["A", "B", "C", "D"])
+    pair_set = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "C", "D"),
+            RecordPair(universe, "A", "B"),
+        ],
+    )
+
+    clusters = pairs_to_clusters(pair_set)
+
+    assert [cluster.records for cluster in clusters] == [
+        ("A", "B"),
+        ("C", "D"),
+    ]
+
+
+def test_pairs_to_clusters_does_not_emit_unused_universe_records() -> None:
+    universe = RecordUniverse(["A", "B", "C", "D"])
+    pair_set = RecordPairSet(
+        universe,
+        [RecordPair(universe, "A", "B")],
+    )
+
+    clusters = pairs_to_clusters(pair_set)
+
+    assert [cluster.records for cluster in clusters] == [
+        ("A", "B"),
+    ]
+
+
+def test_pairs_to_clusters_uses_pair_set_universe() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+    pair_set = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "B", "C"),
+        ],
+    )
+
+    clusters = pairs_to_clusters(pair_set)
+
+    for cluster in clusters:
+        assert cluster.universe is universe
+
+
+def test_pairs_to_clusters_does_not_modify_pair_set() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+    pairs = [
+        RecordPair(universe, "A", "B"),
+        RecordPair(universe, "B", "C"),
+    ]
+    pair_set = RecordPairSet(universe, pairs)
+    original_pairs = tuple(pair.records for pair in pair_set)
+
+    pairs_to_clusters(pair_set)
+
+    assert tuple(pair.records for pair in pair_set) == original_pairs
+
+
+def test_no_record_appears_in_multiple_clusters() -> None:
+    universe = RecordUniverse(["A", "B", "C", "D", "E"])
+    pair_set = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "B", "C"),
+            RecordPair(universe, "D", "E"),
+        ],
+    )
+
+    clusters = pairs_to_clusters(pair_set)
+
+    records = [record for cluster in clusters for record in cluster]
+
+    assert len(records) == len(set(records))
+
+
+def test_pairs_to_clusters_handles_cycles() -> None:
+    universe = RecordUniverse(["A", "B", "C"])
+    pair_set = RecordPairSet(
+        universe,
+        [
+            RecordPair(universe, "A", "B"),
+            RecordPair(universe, "B", "C"),
+            RecordPair(universe, "A", "C"),
+        ],
+    )
+
+    clusters = pairs_to_clusters(pair_set)
+
+    assert len(clusters) == 1
+    assert clusters[0].records == ("A", "B", "C")
+
+
+@given(st.lists(st.text(min_size=1), min_size=1, max_size=10))
+def test_complete_cluster_pair_round_trip_preserves_cluster(
+    records: list[str],
+) -> None:
+    unique_records = list(dict.fromkeys(records))
+
+    universe = RecordUniverse(unique_records)
+    cluster = RecordCluster(universe, unique_records)
+
+    pair_set = cluster_to_pairs(cluster)
+    clusters = pairs_to_clusters(pair_set)
+
+    if len(unique_records) == 1:
+        assert clusters == ()
+    else:
+        assert len(clusters) == 1
+        assert clusters[0] == cluster
